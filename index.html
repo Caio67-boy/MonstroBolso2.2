@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Claudémon - Mundo Aberto</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 0; min-height: 100vh;
+  background: #1a2f1a;
+  font-family: 'Courier New', monospace;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+#wrap { position: relative; }
+#game { image-rendering: pixelated; border: 6px solid #3b2a1a; border-radius: 6px; background:#000; display:block; }
+#hud { display:flex; justify-content: space-between; align-items:center; background:#3b2a1a; color:#ffe9c2; padding:6px 10px; border-radius:6px 6px 0 0; font-size:13px; border:6px solid #3b2a1a; border-bottom:none; }
+#hint { font-size:11px; opacity:0.8; }
+.overlay { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(10,10,20,0.92); display:none; align-items:center; justify-content:center; flex-direction:column; border-radius: 6px; }
+.overlay.show { display:flex; }
+.card-row { display:flex; gap:14px; margin-top:16px; flex-wrap:wrap; justify-content:center; }
+.card { background:#22321f; border:3px solid #6fae4c; border-radius:10px; padding:12px; width:140px; text-align:center; cursor:pointer; transition:transform .1s; }
+.card:hover { transform: scale(1.06); border-color:#ffd166; }
+.card canvas { image-rendering: pixelated; background:#0e1a0e; border-radius:6px; }
+.card h3 { margin:8px 0 2px; font-size:14px; color:#ffd166; }
+.card p { margin:0; font-size:11px; color:#cde; }
+#title { font-size:22px; color:#ffd166; text-shadow:2px 2px #000; }
+#subtitle { font-size:12px; color:#cde; margin-top:4px; text-align:center; padding:0 20px;}
+#battle { position:absolute; top:0; left:0; width:100%; height:100%; display:none; flex-direction:column; background:linear-gradient(#7cc6ff 0%, #7cc6ff 55%, #6cbf5a 55%, #6cbf5a 100%); border-radius:6px; overflow:hidden; }
+#battle.show { display:flex; }
+.battlefield { flex:1; position:relative; }
+.mon-slot { position:absolute; text-align:center; }
+.mon-slot canvas { image-rendering:pixelated; }
+.wild-slot { top:18px; right:40px; }
+.player-slot { bottom:70px; left:40px; }
+.hpbar-wrap { width:130px; background:#222; border:2px solid #fff; border-radius:4px; margin:4px auto 0; }
+.hpbar { height:8px; background:#4caf50; border-radius:2px; transition:width .3s; }
+.mon-name { font-size:12px; background:rgba(0,0,0,0.55); padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:2px;}
+#battle-log { background:#22321f; color:#fff; font-size:12px; padding:8px 10px; min-height:38px; }
+#battle-actions { display:flex; gap:6px; padding:8px 10px; background:#1a241a; }
+#battle-actions button { flex:1; background:#3b2a1a; color:#ffe9c2; border:2px solid #6fae4c; border-radius:6px; padding:8px 4px; font-family:inherit; font-size:12px; cursor:pointer; }
+#battle-actions button:hover { background:#4c3722; }
+#battle-actions button:disabled { opacity:0.4; cursor:default; }
+.stack-overlay { position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; background:rgba(10,10,20,0.94); display:none; flex-direction:column; padding:14px; overflow-y:auto; }
+.stack-overlay.show { display:flex; }
+.stack-overlay h3 { color:#ffd166; margin:0 0 10px; font-size:13px; }
+.switch-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.switch-item { background:#22321f; border:2px solid #6fae4c; border-radius:8px; padding:6px; text-align:center; cursor:pointer; font-size:10px; transition:transform .1s; }
+.switch-item:hover { transform: scale(1.05); border-color:#ffd166; }
+.switch-item.disabled { opacity:0.35; cursor:default; border-color:#555; }
+.switch-item.disabled:hover { transform:none; border-color:#555; }
+.switch-item canvas { image-rendering:pixelated; background:#0e1a0e; border-radius:6px; }
+.switch-item .shp { opacity:0.8; margin-top:2px; }
+.overlay-cancel { margin-top:10px; align-self:flex-start; background:#3b2a1a; color:#ffe9c2; border:2px solid #6fae4c; border-radius:6px; padding:6px 14px; cursor:pointer; font-family:inherit; }
+#pokedex { position:absolute; top:0; left:0; width:100%; height:100%; display:none; background:rgba(10,15,10,0.96); flex-direction:column; padding:14px; border-radius:6px; overflow-y:auto; }
+#pokedex.show { display:flex; }
+#pokedex h2 { color:#ffd166; margin:0 0 10px; font-size:16px; }
+.dex-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.dex-item { background:#22321f; border:2px solid #45602f; border-radius:8px; text-align:center; padding:6px; font-size:10px; }
+.dex-item canvas { image-rendering:pixelated; }
+.dex-item.unknown { opacity:0.35; }
+#party { position:absolute; top:8px; left:8px; display:flex; gap:4px; }
+#party canvas { width:28px; height:28px; background:rgba(0,0,0,0.35); border-radius:4px; image-rendering:pixelated; }
+#toast { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#ffd166; padding:6px 14px; border-radius:6px; font-size:12px; display:none; max-width:90%; text-align:center;}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="hud">
+<div>🌍 Claudémon</div>
+<div id="hint">Setas/WASD: mover · P: Pokédex</div>
+</div>
+<div style="position:relative;">
+<canvas id="game" width="640" height="480"></canvas>
+ 
+<div id="starterOverlay" class="overlay show">
+<div id="title">CLAUDÉMON</div>
+<div id="subtitle">Escolha seu inicial e explore o mundo aberto</div>
+<div class="card-row" id="starterCards"></div>
+</div>
+ 
+<div id="battle">
+<div class="battlefield">
+<div class="mon-slot wild-slot">
+<div class="mon-name" id="wildName">???</div>
+<canvas id="wildCanvas" width="96" height="96"></canvas>
+<div class="hpbar-wrap"><div class="hpbar" id="wildHp" style="width:100%"></div></div>
+</div>
+<div class="mon-slot player-slot">
+<div class="mon-name" id="playerName">???</div>
+<canvas id="playerCanvas" width="96" height="96"></canvas>
+<div class="hpbar-wrap"><div class="hpbar" id="playerHp" style="width:100%"></div></div>
+</div>
+</div>
+<div id="battle-log">Um monstro selvagem apareceu!</div>
+<div id="battle-actions">
+<button id="btnAttack">⚔️ Atacar</button>
+<button id="btnBall">🔴 Poké-Bola</button>
+<button id="btnSwitch">🔁 Trocar</button>
+<button id="btnRun">🏃 Fugir</button>
+</div>
+ 
+  <div id="movesOverlay" class="stack-overlay">
+<h3>Escolha um ataque:</h3>
+<div class="switch-grid" id="movesGrid"></div>
+<button class="overlay-cancel" id="movesCancel">Cancelar</button>
+</div>
+ 
+  <div id="switchOverlay" class="stack-overlay">
+<h3 id="switchTitle">Escolha um monstro:</h3>
+<div class="switch-grid" id="switchGrid"></div>
+<button class="overlay-cancel" id="switchCancel">Cancelar</button>
+</div>
+</div>
+ 
+<div id="pokedex">
+<h2>📘 Pokédex do Claudémon</h2>
+<div class="dex-grid" id="dexGrid"></div>
+<button class="overlay-cancel" id="closeDex">Fechar</button>
+</div>
+ 
+<div id="party"></div>
+<div id="toast"></div>
+</div>
+</div>
+ 
+<script>
+/* ============ CONFIG ============ */
+const TILE = 32, COLS = 20, ROWS = 15;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+ 
+/* ============ PIXEL HELPERS ============ */
+function newCanvas(s){ const c = document.createElement('canvas'); c.width=s; c.height=s; return c; }
+function spriteCanvas(size, drawFn){
+  const c = newCanvas(size);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  drawFn(g, size);
+  return c;
+}
+function px(g, u, gx, gy, gw, gh, color){
+  g.fillStyle = color;
+  g.fillRect(Math.round(gx*u), Math.round(gy*u), Math.max(1, Math.round(gw*u)), Math.max(1, Math.round(gh*u)));
+}
+ 
+/* ============ CREATURE SPRITES ============ */
+function drawDogOfHell(g,s,stage){
+  const dark = stage===0?'#241417':stage===1?'#33181c':'#2a1015';
+  const flame = stage===0?'#e2542b':stage===1?'#ff6a2b':'#ff9d2b';
+  const u = s/16;
+  const P = (gx,gy,gw,gh,c) => px(g,u,gx,gy,gw,gh,c);
+  const grow = stage?1.4:0;
+  if(stage>=2){
+    P(1,6,3,3, dark); P(12,6,3,3, dark);
+    P(1.6,6.6,0.6,0.6, flame); P(12.8,6.6,0.6,0.6, flame);
+  }
+  P(4-grow*0.3,7,8+grow*0.6,6, dark);
+  P(7,13,2,2, dark); P(10,13,2,2, dark);
+  P(4-grow*0.3,2,8+grow*0.6,5, dark);
+  P(3,0,2,3, flame); P(11,0,2,3, flame);
+  P(6.3,4,0.7,0.7, flame); P(9,4,0.7,0.7, flame);
+  P(6.7,6,2.6,0.8, '#fff');
+  P(13,7,1.5,4, flame);
+  if(stage>=1) P(1,7,1.5,4, dark);
+}
+ 
+function drawBlueOctopus(g,s,stage){
+  const body = stage===0?'#2e7fd6':stage===1?'#2160a8':'#243a7a';
+  const light = stage===0?'#6fb4ff':stage===1?'#5ea0e0':'#5f78c9';
+  const u = s/16;
+  const P = (gx,gy,gw,gh,c) => px(g,u,gx,gy,gw,gh,c);
+  const r = 4+stage*0.8;
+  P(8-r/2, 6-r/2, r, r, body);
+  P(8-r/3, 6-r/3, r*0.66, r*0.4, light);
+  const legs = stage>=2?8:6;
+  for(let i=0;i<legs;i++){
+    const lx = 3+i*(10/(legs-1));
+    P(lx, 10, 1.2, 4+((i%2)*1.5), body);
+  }
+  P(6,5.5,1,1, '#fff'); P(9.5,5.5,1,1, '#fff');
+  P(6.3,5.8,0.5,0.5, '#111'); P(9.8,5.8,0.5,0.5, '#111');
+  if(stage>=1) P(5,3,6,2, light);
+}
+ 
+function drawEllefant(g,s,stage){
+  const body = stage===0?'#9aa57a':stage===1?'#7c8860':'#6f6146';
+  const light = stage===0?'#c8d0a0':stage===1?'#aeb884':'#8f7a56';
+  const leaf = '#7bc142', leaf2 = '#8fd155';
+  const u = s/16;
+  const P = (gx,gy,gw,gh,c) => px(g,u,gx,gy,gw,gh,c);
+  const grow = stage*0.7;
+  P(4,8-grow*0.3,9+grow,6+grow*0.6, body);
+  P(3,3,6+grow*0.4,6, body);
+  P(1.5,7,1.5,6, body);
+  P(1,12.5,1.5,1.5, body);
+  P(1,1,2.5,4, light);
+  P(6.5,1.5,3,4, light);
+  P(4.5,5,0.8,0.8, '#111');
+  P(9,13,2,2, body); P(12,13,2,2, body);
+  if(stage>=1) P(3.5,6,1.5,1, '#fff');
+  if(stage>=1){ P(5,0,1,1, leaf); P(7,0.3,1,1, leaf2); }
+  if(stage>=2){
+    for(let i=0;i<5;i++) P(6+i*0.9,7,0.5,2, body);
+    P(3,6.5,1.5,2, '#fff');
+    P(4,0,1,1,leaf2); P(8.5,0,1,1,leaf); P(6,0,1,1,leaf);
+  }
+}
+ 
+function drawCapy(g,s){
+  const u = s/16;
+  const P = (gx,gy,gw,gh,c) => px(g,u,gx,gy,gw,gh,c);
+  const outline='#332212';
+  P(4,13,2.5,2, '#5c4530'); P(9.5,13,2.5,2, '#5c4530');
+  P(2,7,12,6, '#ab835a');
+  P(2,7,12,1, outline); P(2,12,12,1, outline);
+  P(4,10,8,3, '#c9a877');
+  P(1,5,6,5, '#ab835a');
+  P(1,5,6,1, outline); P(1,9,6,1, outline);
+  P(0.3,6,2,2.5, '#8f6c46');
+  P(3,3,1.5,2, '#5c4530'); P(6,2.5,1.5,2, '#5c4530');
+  P(2.6,6,0.8,0.8, '#1c130a');
+  P(0.5,7,0.7,0.5, '#1c130a');
+}
+ 
+function drawCapyRoyal(g,s,royal){
+  drawCapy(g,s);
+  const u = s/16;
+  const P = (gx,gy,gw,gh,c) => px(g,u,gx,gy,gw,gh,c);
+  const cape = royal==='king' ? '#2255c9' : '#c22a4e';
+  const gold = '#f4c542';
+  P(9,7,4,7, cape);
+  P(9,7,4,1, '#000');
+  if(royal==='king'){
+    P(2.5,1.6,0.9,1, gold); P(3.5,1,0.9,1.3, gold); P(4.5,1.6,0.9,1, gold); P(5.5,1,0.9,1.3, gold); P(6.5,1.6,0.9,1, gold);
+    P(3.8,1.4,0.3,0.3, cape);
+  } else {
+    P(2.7,1.4,0.8,1.4, gold); P(3.7,0.8,0.8,1.8, gold); P(4.7,1.1,0.8,1.5, gold); P(5.6,1.6,0.8,1, gold);
+    P(3.9,1.2,0.3,0.3, cape);
+  }
+}
+ 
+/* ============ SPECIES DATA ============ */
+const SPECIES = {
+  dogOfHell:{ name:'Dog of Hell', type:'Fogo', stage:0, hp:36, atk:40, def:30,
+    draw:(g,s)=>drawDogOfHell(g,s,0),
+    moves:[{name:'Arranhão',type:'Normal',power:40},{name:'Investida',type:'Normal',power:45},{name:'Brasa',type:'Fogo',power:45},{name:'Presas de Fogo',type:'Fogo',power:60}] },
+  warDog:{ name:'War Dog', type:'Fogo', stage:1, hp:52, atk:58, def:45,
+    draw:(g,s)=>drawDogOfHell(g,s,1),
+    moves:[{name:'Investida',type:'Normal',power:50},{name:'Presas de Fogo',type:'Fogo',power:65},{name:'Investida Feroz',type:'Normal',power:60},{name:'Rugido de Guerra',type:'Fogo',power:70}] },
+  cerberos:{ name:'Cerberos', type:'Fogo', stage:2, hp:74, atk:85, def:65,
+    draw:(g,s)=>drawDogOfHell(g,s,2),
+    moves:[{name:'Presas de Fogo',type:'Fogo',power:75},{name:'Fúria Tríplice',type:'Fogo',power:90},{name:'Investida Descomunal',type:'Normal',power:80},{name:'Uivo Infernal',type:'Fogo',power:95}] },
+ 
+  blueOctopus:{ name:'Blue Octopus', type:'Água', stage:0, hp:34, atk:35, def:45,
+    draw:(g,s)=>drawBlueOctopus(g,s,0),
+    moves:[{name:'Investida',type:'Normal',power:40},{name:'Bolha',type:'Água',power:45},{name:'Rodopio',type:'Normal',power:45},{name:'Jato d\u2019Água',type:'Água',power:60}] },
+  molusco:{ name:'Molusco', type:'Água', stage:1, hp:50, atk:50, def:60,
+    draw:(g,s)=>drawBlueOctopus(g,s,1),
+    moves:[{name:'Jato d\u2019Água',type:'Água',power:65},{name:'Investida',type:'Normal',power:55},{name:'Tentáculo',type:'Normal',power:60},{name:'Maré Brava',type:'Água',power:75}] },
+  kraken:{ name:'Kraken', type:'Água', stage:2, hp:72, atk:68, def:75,
+    draw:(g,s)=>drawBlueOctopus(g,s,2),
+    moves:[{name:'Jato d\u2019Água',type:'Água',power:80},{name:'Redemoinho',type:'Água',power:95},{name:'Investida Abissal',type:'Normal',power:85},{name:'Fúria das Profundezas',type:'Água',power:100}] },
+ 
+  litolElefant:{ name:'Litol Elefant', type:'Grama', stage:0, hp:40, atk:38, def:48,
+    draw:(g,s)=>drawEllefant(g,s,0),
+    moves:[{name:'Investida',type:'Normal',power:40},{name:'Folha Navalha',type:'Grama',power:45},{name:'Investida Pesada',type:'Normal',power:50},{name:'Chicote de Vinha',type:'Grama',power:60}] },
+  elefant:{ name:'Elefant', type:'Grama', stage:1, hp:60, atk:52, def:62,
+    draw:(g,s)=>drawEllefant(g,s,1),
+    moves:[{name:'Chicote de Vinha',type:'Grama',power:65},{name:'Pisão',type:'Normal',power:60},{name:'Folha Navalha',type:'Grama',power:70},{name:'Investida Colossal',type:'Normal',power:75}] },
+  mamute:{ name:'Mamute', type:'Grama', stage:2, hp:82, atk:68, def:85,
+    draw:(g,s)=>drawEllefant(g,s,2),
+    moves:[{name:'Terremoto Verde',type:'Grama',power:85},{name:'Pisão Ancestral',type:'Normal',power:90},{name:'Folha Navalha',type:'Grama',power:80},{name:'Fúria da Floresta',type:'Grama',power:100}] },
+ 
+  capy:{ name:'Capy', type:'Normal', stage:0, hp:46, atk:35, def:35,
+    draw:(g,s)=>drawCapy(g,s),
+    moves:[{name:'Investida',type:'Normal',power:40},{name:'Mordida',type:'Normal',power:45},{name:'Investida Feroz',type:'Normal',power:50}] },
+  capyKing:{ name:'Capy King', type:'Normal', stage:1, hp:70, atk:60, def:70,
+    draw:(g,s)=>drawCapyRoyal(g,s,'king'),
+    moves:[{name:'Investida',type:'Normal',power:50},{name:'Mordida',type:'Normal',power:55},{name:'Golpe Real',type:'Normal',power:75},{name:'Decreto Soberano',type:'Normal',power:80}] },
+  capyQueen:{ name:'Capy Queen', type:'Normal', stage:1, hp:68, atk:55, def:65,
+    draw:(g,s)=>drawCapyRoyal(g,s,'queen'),
+    moves:[{name:'Investida',type:'Normal',power:50},{name:'Mordida',type:'Normal',power:55},{name:'Graça Soberana',type:'Normal',power:75},{name:'Aura Real',type:'Normal',power:80}] }
+};
+ 
+const STARTERS = ['dogOfHell','blueOctopus','litolElefant'];
+const WILD_TABLE = [
+  {id:'capy', w:30}, {id:'dogOfHell', w:12}, {id:'blueOctopus', w:12}, {id:'litolElefant', w:12},
+  {id:'warDog', w:8}, {id:'molusco', w:8}, {id:'elefant', w:8},
+  {id:'cerberos', w:3}, {id:'kraken', w:3}, {id:'mamute', w:3}
+];
+ 
+/* ============ TYPES ============ */
+const TYPE_CHART = {Fogo:{Grama:2,'Água':0.5}, 'Água':{Fogo:2,Grama:0.5}, Grama:{'Água':2,Fogo:0.5}};
+function effectiveness(atkType, defType){
+  if(TYPE_CHART[atkType] && TYPE_CHART[atkType][defType]!==undefined) return TYPE_CHART[atkType][defType];
+  return 1;
+}
+ 
+/* ============ EVOLUÇÃO / NÍVEL ============ */
+const EVOLUTION = {
+  dogOfHell:'warDog', warDog:'cerberos',
+  blueOctopus:'molusco', molusco:'kraken',
+  litolElefant:'elefant', elefant:'mamute',
+  capy: {male:'capyKing', female:'capyQueen'}
+};
+const EVOLVE_AT = { dogOfHell:16, warDog:32, blueOctopus:16, molusco:32, litolElefant:16, elefant:32, capy:16 };
+ 
+function calcMaxHp(id, level){ return Math.max(1, Math.round(SPECIES[id].hp*(0.6+level*0.08))); }
+function calcStat(base, level){ return Math.max(1, Math.round(base*(0.6+level*0.08))); }
+ 
+function levelUp(member, times=1){
+  const oldId = member.id;
+  for(let i=0;i<times;i++){
+    member.level++;
+    const newMaxHp = calcMaxHp(member.id, member.level);
+    const gain = newMaxHp - member.maxHp;
+    member.maxHp = newMaxHp;
+    member.hp = Math.min(member.maxHp, member.hp + gain);
+    const evoTarget = EVOLUTION[member.id];
+    const threshold = EVOLVE_AT[member.id];
+    if(evoTarget && threshold && member.level >= threshold){
+      let newId;
+      if(typeof evoTarget === 'string') newId = evoTarget;
+      else newId = member.gender === 'female' ? evoTarget.female : evoTarget.male;
+      member.id = newId;
+      player.seen.add(newId);
+      member.maxHp = calcMaxHp(member.id, member.level);
+      member.hp = member.maxHp;
+    }
+  }
+  return { evolved: member.id !== oldId, oldId, newId: member.id };
+}
+ 
+const spriteCache = {};
+function getSprite(id, size){
+  const key = id+'_'+size;
+  if(!spriteCache[key]) spriteCache[key] = spriteCanvas(size, (g,s)=>SPECIES[id].draw(g,s));
+  return spriteCache[key];
+}
+ 
+/* ============ WORLD / MAP ============ */
+let map = [];
+function genMap(){
+  map = [];
+  for(let y=0;y<ROWS;y++){
+    const row=[];
+    for(let x=0;x<COLS;x++){
+      let t = 0;
+      if(y<2||y>=ROWS-2||x<2||x>=COLS-2) t=2;
+      else if(y<3||y>=ROWS-3||x<3||x>=COLS-3) t=3;
+      else {
+        const r = Math.random();
+        if(r<0.07) t=4;
+        else if(r<0.30) t=1;
+        else t=0;
+      }
+      row.push(t);
+    }
+    map.push(row);
+  }
+  const sx=Math.floor(COLS/2), sy=Math.floor(ROWS/2);
+  for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ map[sy+dy][sx+dx]=0; }
+  return {sx, sy};
+}
+ 
+function drawTile(x,y,t){
+  const px_=x*TILE, py=y*TILE;
+  const shades = { 0:['#5fae43','#569c3c'], 1:['#3c7a2c','#356b26'], 2:['#3a86c8','#3679b5'], 3:['#e3c98a','#d9bd78'], 4:null };
+  if(t===4){
+    ctx.fillStyle='#5fae43'; ctx.fillRect(px_,py,TILE,TILE);
+    ctx.fillStyle='#6b4423'; ctx.fillRect(px_+13,py+18,6,14);
+    ctx.fillStyle='#2f6b1e'; ctx.fillRect(px_+3,py,26,24);
+    ctx.fillStyle='#3d8a28'; ctx.fillRect(px_+6,py+3,8,7);
+    return;
+  }
+  const [c1,c2] = shades[t];
+  ctx.fillStyle = ((x+y)%2===0)?c1:c2;
+  ctx.fillRect(px_,py,TILE,TILE);
+  if(t===1){ ctx.fillStyle='rgba(0,0,0,0.25)'; for(let i=0;i<4;i++){ ctx.fillRect(px_+2+i*7,py+TILE-14,2,12); } }
+  if(t===2){ ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.fillRect(px_+2,py+15,28,2); }
+}
+ 
+function tileAt(x,y){ return map[y] && map[y][x]!==undefined ? map[y][x] : 2; }
+function blocked(x,y){ const t=tileAt(x,y); return t===2 || t===4; }
+ 
+/* ============ PLAYER ============ */
+let player = { x:0, y:0, px:0, py:0, dir:'down', team:[], seen:new Set(), activeIndex:0 };
+let moving = false, stepToggle = false, legSwing = 0, bodyBob = 0;
+ 
+function drawPlayer(){
+  const px_ = player.px, py = player.py;
+  ctx.save();
+  ctx.translate(px_, py + bodyBob);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(8,29,16,4);
+  ctx.fillStyle = '#4a3320';
+  ctx.fillRect(9, 28 + legSwing, 5, 6);
+  ctx.fillRect(18, 28 - legSwing, 5, 6);
+  const dir = player.dir;
+  if(dir === 'up'){
+    ctx.fillStyle='#2b5fa8'; ctx.fillRect(8,16,16,12);
+    ctx.fillStyle='#a52c1f'; ctx.fillRect(8,2,16,16);
+    ctx.fillStyle='#8f2519'; ctx.fillRect(9,13,14,3);
+  } else if(dir === 'left' || dir === 'right'){
+    const flip = dir === 'left' ? -1 : 1;
+    ctx.save(); ctx.translate(16,0); ctx.scale(flip,1); ctx.translate(-16,0);
+    ctx.fillStyle='#2b5fa8'; ctx.fillRect(8,16,16,12);
+    ctx.fillStyle='#f0c090'; ctx.fillRect(14,6,10,12);
+    ctx.fillStyle='#c0392b'; ctx.fillRect(12,2,14,7);
+    ctx.fillStyle='#1a1008'; ctx.fillRect(22,10,2,2);
+    ctx.restore();
+  } else {
+    ctx.fillStyle='#2b5fa8'; ctx.fillRect(8,16,16,12);
+    ctx.fillStyle='#f0c090'; ctx.fillRect(9,6,14,11);
+    ctx.fillStyle='#c0392b'; ctx.fillRect(8,2,16,7);
+    ctx.fillStyle='#1a1008'; ctx.fillRect(13,11,2,2); ctx.fillRect(18,11,2,2);
+  }
+  ctx.restore();
+}
+ 
+function render(){
+  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) drawTile(x,y,map[y][x]);
+  drawPlayer();
+}
+ 
+/* ============ MOVE / ENCOUNTER ============ */
+const MOVE_DURATION = 150;
+function dirFromDelta(dx,dy){
+  if(dx===1) return 'right'; if(dx===-1) return 'left';
+  if(dy===1) return 'down'; if(dy===-1) return 'up';
+  return player.dir;
+}
+function tryMove(dx,dy){
+  if(moving || battleActive || document.getElementById('starterOverlay').classList.contains('show')) return;
+  player.dir = dirFromDelta(dx,dy);
+  const nx=player.x+dx, ny=player.y+dy;
+  if(blocked(nx,ny)){ render(); return; }
+  const fromPx = player.px, fromPy = player.py;
+  const toPx = nx*TILE, toPy = ny*TILE;
+  player.x = nx; player.y = ny;
+  moving = true;
+  const start = performance.now();
+  function step(now){
+    const t = Math.min(1, (now-start)/MOVE_DURATION);
+    player.px = fromPx + (toPx-fromPx)*t;
+    player.py = fromPy + (toPy-fromPy)*t;
+    legSwing = Math.sin(t*Math.PI) * 3 * (stepToggle ? 1 : -1);
+    bodyBob = -Math.abs(Math.sin(t*Math.PI)) * 1;
+    render();
+    if(t<1){ requestAnimationFrame(step); }
+    else {
+      moving = false; legSwing = 0; bodyBob = 0; stepToggle = !stepToggle;
+      player.px = toPx; player.py = toPy;
+      render();
+      const tt = tileAt(nx,ny);
+      if(tt===1 && Math.random() < 0.16){ startWildBattle(); }
+    }
+  }
+  requestAnimationFrame(step);
+}
+window.addEventListener('keydown', (e)=>{
+  if(e.key==='p' || e.key==='P'){ togglePokedex(); return; }
+  const map2 = { ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0],
+                 w:[0,-1], s:[0,1], a:[-1,0], d:[1,0], W:[0,-1], S:[0,1], A:[-1,0], D:[1,0] };
+  if(map2[e.key]){ e.preventDefault(); tryMove(map2[e.key][0], map2[e.key][1]); }
+});
+ 
+/* ============ STARTER SELECTION ============ */
+function pickWeighted(table){
+  const total = table.reduce((a,b)=>a+b.w,0);
+  let r = Math.random()*total;
+  for(const item of table){ if(r<item.w) return item.id; r-=item.w; }
+  return table[0].id;
+}
+function initStarterScreen(){
+  const wrap = document.getElementById('starterCards');
+  STARTERS.forEach(id=>{
+    const sp = SPECIES[id];
+    const div = document.createElement('div'); div.className='card';
+    const c = document.createElement('canvas'); c.width=100; c.height=100;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled=false;
+    g.drawImage(getSprite(id,44), 28, 28);
+    div.appendChild(c);
+    const h = document.createElement('h3'); h.textContent = sp.name; div.appendChild(h);
+    const p = document.createElement('p'); p.textContent = sp.type; div.appendChild(p);
+    div.onclick = ()=>chooseStarter(id);
+    wrap.appendChild(div);
+  });
+}
+function chooseStarter(id){
+  const sp = SPECIES[id];
+  const maxHp = calcMaxHp(id, 5);
+  player.team.push({ id, level:5, hp:maxHp, maxHp, gender:undefined });
+  player.activeIndex = 0;
+  player.seen.add(id);
+  document.getElementById('starterOverlay').classList.remove('show');
+  showToast(`Você escolheu ${sp.name}!`);
+  renderParty();
+}
+ 
+/* ============ BATTLE ============ */
+let battleActive=false, wild=null;
+function startWildBattle(){
+  const id = pickWeighted(WILD_TABLE);
+  const sp = SPECIES[id];
+  const lvl = 2 + sp.stage*10 + Math.floor(Math.random()*6);
+  const hp = calcMaxHp(id, lvl);
+  wild = { id, level:lvl, hp, maxHp:hp };
+  player.seen.add(id);
+  battleActive = true;
+  player.activeIndex = player.team.findIndex(m=>m.hp>0);
+  if(player.activeIndex === -1) player.activeIndex = 0;
+  document.getElementById('battle').classList.add('show');
+  document.getElementById('wildName').textContent = `${sp.name} Lv.${lvl}`;
+  const wc = document.getElementById('wildCanvas'); const wg=wc.getContext('2d'); wg.imageSmoothingEnabled=false;
+  wg.clearRect(0,0,96,96); wg.drawImage(getSprite(id,80),8,8);
+  const active = player.team[player.activeIndex];
+  const psp = SPECIES[active.id];
+  document.getElementById('playerName').textContent = `${psp.name} Lv.${active.level}`;
+  const pc = document.getElementById('playerCanvas'); const pg=pc.getContext('2d'); pg.imageSmoothingEnabled=false;
+  pg.clearRect(0,0,96,96); pg.drawImage(getSprite(active.id,80),8,8);
+  updateBattleBars();
+  renderParty();
+  log(`Um ${sp.name} selvagem apareceu!`);
+  setBattleButtons(true);
+}
+function updateBattleBars(){
+  document.getElementById('wildHp').style.width = Math.max(0,(wild.hp/wild.maxHp*100))+'%';
+  const active = player.team[player.activeIndex];
+  document.getElementById('playerHp').style.width = Math.max(0,(active.hp/active.maxHp*100))+'%';
+}
+function log(msg){ document.getElementById('battle-log').textContent = msg; }
+function setBattleButtons(on){
+  document.getElementById('btnAttack').disabled=!on;
+  document.getElementById('btnBall').disabled=!on;
+  document.getElementById('btnSwitch').disabled=!on;
+  document.getElementById('btnRun').disabled=!on;
+}
+ 
+/* ---- moves overlay ---- */
+function openMovesOverlay(){
+  const active = player.team[player.activeIndex];
+  const sp = SPECIES[active.id];
+  const grid = document.getElementById('movesGrid'); grid.innerHTML='';
+  sp.moves.forEach((m,idx)=>{
+    const div = document.createElement('div');
+    div.className='switch-item';
+    div.innerHTML = `<div style="font-weight:bold;">${m.name}</div><div class="shp">${m.type} · Poder ${m.power}</div>`;
+    div.onclick = ()=>doAttackMove(idx);
+    grid.appendChild(div);
+  });
+  document.getElementById('movesOverlay').classList.add('show');
+  setBattleButtons(false);
+}
+function closeMovesOverlay(){ document.getElementById('movesOverlay').classList.remove('show'); }
+document.getElementById('movesCancel').onclick = ()=>{ closeMovesOverlay(); setBattleButtons(true); };
+document.getElementById('btnAttack').onclick = ()=>{ if(!battleActive) return; openMovesOverlay(); };
+ 
+function refreshPlayerBattleSprite(){
+  const active = player.team[player.activeIndex];
+  const pg2 = document.getElementById('playerCanvas').getContext('2d');
+  pg2.clearRect(0,0,96,96); pg2.drawImage(getSprite(active.id,80),8,8);
+  document.getElementById('playerName').textContent = `${SPECIES[active.id].name} Lv.${active.level}`;
+}
+ 
+function doAttackMove(idx){
+  closeMovesOverlay();
+  setBattleButtons(false);
+  const active = player.team[player.activeIndex];
+  const aSpecies = SPECIES[active.id];
+  const wSpecies = SPECIES[wild.id];
+  const move = aSpecies.moves[idx];
+  const atk = calcStat(aSpecies.atk, active.level);
+  const def = calcStat(wSpecies.def, wild.level);
+  const eff = effectiveness(move.type, wSpecies.type);
+  const dmg = Math.max(1, Math.round(move.power*(atk/def)*eff*(0.85+Math.random()*0.15)/3));
+  wild.hp = Math.max(0, wild.hp-dmg);
+  updateBattleBars();
+  let msg = `${aSpecies.name} usou ${move.name}! -${dmg} HP`;
+  if(eff>1) msg += ' Super efetivo!'; else if(eff<1) msg += ' Pouco efetivo...';
+  log(msg);
+  setTimeout(()=>{
+    if(wild.hp<=0){ handleWildFaint(); return; }
+    const wMove = wSpecies.moves[Math.floor(Math.random()*wSpecies.moves.length)];
+    const wAtk = calcStat(wSpecies.atk, wild.level);
+    const wDef = calcStat(aSpecies.def, active.level);
+    const wEff = effectiveness(wMove.type, aSpecies.type);
+    const dmg2 = Math.max(1, Math.round(wMove.power*(wAtk/wDef)*wEff*(0.85+Math.random()*0.15)/3));
+    active.hp = Math.max(0, active.hp-dmg2);
+    updateBattleBars();
+    let msg2 = `${wSpecies.name} usou ${wMove.name}! -${dmg2} HP`;
+    if(wEff>1) msg2 += ' Super efetivo!'; else if(wEff<1) msg2 += ' Pouco efetivo...';
+    log(msg2);
+    setTimeout(()=>{
+      if(active.hp<=0){ handleFaint(); }
+      else { setBattleButtons(true); }
+    },700);
+  },700);
+}
+ 
+function handleWildFaint(){
+  const active = player.team[player.activeIndex];
+  const oldId = active.id;
+  const res = levelUp(active,1);
+  let msg = `${SPECIES[wild.id].name} derrotado! ${SPECIES[oldId].name} subiu para o nível ${active.level}!`;
+  if(res.evolved){
+    msg = `${SPECIES[wild.id].name} derrotado! ${SPECIES[oldId].name} evoluiu para ${SPECIES[res.newId].name}! 🎉 (Nível ${active.level})`;
+    refreshPlayerBattleSprite();
+  }
+  log(msg);
+  updateBattleBars();
+  renderParty();
+  setTimeout(()=>endBattle(true), 1500);
+}
+ 
+document.getElementById('btnBall').onclick = ()=>{
+  if(!battleActive) return;
+  setBattleButtons(false);
+  const chance = 1 - (wild.hp/wild.maxHp)*0.8;
+  log('Você jogou uma Poké-Bola...');
+  setTimeout(()=>{
+    if(Math.random() < Math.max(0.15,chance)){
+      let msg = `Capturado! ${SPECIES[wild.id].name} foi adicionado ao time.`;
+      if(player.team.length<6){
+        const gender = wild.id==='capy' ? (Math.random()<0.5?'male':'female') : undefined;
+        player.team.push({id:wild.id, level:wild.level, hp:wild.maxHp, maxHp:wild.maxHp, gender});
+      }
+      const active = player.team[player.activeIndex];
+      const oldId = active.id;
+      const res = levelUp(active,1);
+      if(res.evolved){
+        msg += ` ${SPECIES[oldId].name} evoluiu para ${SPECIES[active.id].name}! 🎉`;
+        refreshPlayerBattleSprite();
+      }
+      log(msg);
+      updateBattleBars();
+      renderParty();
+      setTimeout(()=>endBattle(true), 1200);
+    } else {
+      log('Ele escapou da bola!');
+      setTimeout(()=>setBattleButtons(true), 700);
+    }
+  }, 700);
+};
+ 
+document.getElementById('btnRun').onclick = ()=>{
+  if(!battleActive) return;
+  log('Você fugiu da batalha.');
+  setTimeout(()=>endBattle(null), 500);
+};
+ 
+function endBattle(playerWon){
+  battleActive=false;
+  document.getElementById('battle').classList.remove('show');
+  closeSwitchOverlay(); closeMovesOverlay();
+  if(playerWon===false){
+    player.team.forEach(m=> m.hp = m.maxHp);
+    showToast('Seus monstros desmaiaram... foram levados para recuperação!');
+  }
+  renderParty();
+}
+ 
+/* ============ TROCA DE MONSTRO ============ */
+function handleFaint(){
+  const hasOthers = player.team.some((m,idx)=>idx!==player.activeIndex && m.hp>0);
+  if(hasOthers){ openSwitchOverlay(true); } else { endBattle(false); }
+}
+let switchForced = false;
+function openSwitchOverlay(forced){
+  switchForced = forced;
+  const grid = document.getElementById('switchGrid'); grid.innerHTML='';
+  player.team.forEach((m, idx)=>{
+    const sp = SPECIES[m.id];
+    const isActive = idx === player.activeIndex;
+    const fainted = m.hp<=0;
+    const div = document.createElement('div');
+    div.className = 'switch-item' + ((isActive||fainted) ? ' disabled':'');
+    const c = document.createElement('canvas'); c.width=48; c.height=48;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled=false;
+    g.drawImage(getSprite(m.id,40),4,4);
+    div.appendChild(c);
+    const nm=document.createElement('div'); nm.textContent = `${sp.name} Lv.${m.level}`; div.appendChild(nm);
+    const hp=document.createElement('div'); hp.className='shp';
+    hp.textContent = fainted ? 'Desmaiado' : `${m.hp}/${m.maxHp} HP`;
+    div.appendChild(hp);
+    if(!isActive && !fainted) div.onclick = ()=>doSwitch(idx);
+    grid.appendChild(div);
+  });
+  document.getElementById('switchTitle').textContent = forced
+    ? `${SPECIES[player.team[player.activeIndex].id].name} desmaiou! Escolha outro monstro:`
+    : 'Escolha um monstro:';
+  document.getElementById('switchCancel').style.display = forced ? 'none' : 'inline-block';
+  document.getElementById('switchOverlay').classList.add('show');
+  setBattleButtons(false);
+}
+function closeSwitchOverlay(){ document.getElementById('switchOverlay').classList.remove('show'); }
+function doSwitch(idx){
+  const wasForced = switchForced;
+  player.activeIndex = idx;
+  refreshPlayerBattleSprite();
+  updateBattleBars();
+  renderParty();
+  closeSwitchOverlay();
+  const active = player.team[idx];
+  const psp = SPECIES[active.id];
+  if(wasForced){
+    log(`Vai, ${psp.name}!`);
+    setBattleButtons(true);
+  } else {
+    log(`Você trocou para ${psp.name}!`);
+    setTimeout(()=>{
+      const wSpecies = SPECIES[wild.id];
+      const wMove = wSpecies.moves[Math.floor(Math.random()*wSpecies.moves.length)];
+      const wAtk = calcStat(wSpecies.atk, wild.level);
+      const wDef = calcStat(psp.def, active.level);
+      const wEff = effectiveness(wMove.type, psp.type);
+      const dmg2 = Math.max(1, Math.round(wMove.power*(wAtk/wDef)*wEff*(0.85+Math.random()*0.15)/3));
+      active.hp = Math.max(0, active.hp-dmg2);
+      updateBattleBars();
+      log(`${wSpecies.name} atacou ${psp.name}! -${dmg2} HP`);
+      setTimeout(()=>{ if(active.hp<=0){ handleFaint(); } else { setBattleButtons(true); } }, 700);
+    }, 600);
+  }
+}
+document.getElementById('btnSwitch').onclick = ()=>{
+  if(!battleActive) return;
+  const hasOthers = player.team.some((m,idx)=>idx!==player.activeIndex && m.hp>0);
+  if(!hasOthers){ showToast('Nenhum outro monstro disponível!'); return; }
+  openSwitchOverlay(false);
+};
+document.getElementById('switchCancel').onclick = ()=>{ closeSwitchOverlay(); setBattleButtons(true); };
+ 
+/* ============ POKEDEX ============ */
+function togglePokedex(){
+  const dex = document.getElementById('pokedex');
+  if(dex.classList.contains('show')){ dex.classList.remove('show'); return; }
+  const grid = document.getElementById('dexGrid'); grid.innerHTML='';
+  Object.keys(SPECIES).forEach(id=>{
+    const sp = SPECIES[id];
+    const known = player.seen.has(id);
+    const div = document.createElement('div');
+    div.className='dex-item'+(known?'':' unknown');
+    const c = document.createElement('canvas'); c.width=48; c.height=48;
+    if(known){ const g=c.getContext('2d'); g.imageSmoothingEnabled=false; g.drawImage(getSprite(id,40),4,4); }
+    div.appendChild(c);
+    const nm = document.createElement('div'); nm.textContent = known?sp.name:'???'; div.appendChild(nm);
+    if(known){ const ty=document.createElement('div'); ty.textContent=sp.type; ty.style.opacity=0.7; div.appendChild(ty); }
+    grid.appendChild(div);
+  });
+  dex.classList.add('show');
+}
+document.getElementById('closeDex').onclick = togglePokedex;
+ 
+/* ============ PARTY UI ============ */
+function renderParty(){
+  const wrap = document.getElementById('party'); wrap.innerHTML='';
+  player.team.forEach((m, idx)=>{
+    const c = document.createElement('canvas'); c.width=28; c.height=28;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled=false;
+    g.drawImage(getSprite(m.id,24),2,2);
+    if(battleActive && idx === player.activeIndex) c.style.outline = '2px solid #ffd166';
+    if(m.hp<=0) c.style.opacity = '0.35';
+    wrap.appendChild(c);
+  });
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display='block';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>t.style.display='none', 2200);
+}
+ 
+/* ============ INIT ============ */
+const spawn = genMap();
+player.x = spawn.sx; player.y = spawn.sy;
+player.px = spawn.sx*TILE; player.py = spawn.sy*TILE;
+render();
+initStarterScreen();
+</script>
+</body>
+</html>

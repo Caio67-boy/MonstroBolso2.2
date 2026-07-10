@@ -1041,6 +1041,8 @@ function tryMove(dx,dy){
   requestAnimationFrame(step);
 }
 window.addEventListener('keydown', (e)=>{
+  const tag = document.activeElement && document.activeElement.tagName;
+  if(tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT') return;
   if(dialogueActive){
     if(e.key==='Enter' || e.key===' '){ e.preventDefault(); advanceDialogue(); }
     return;
@@ -2034,13 +2036,14 @@ async function saveAccount(){
   const passwordHash = player._passwordHash || player._pendingPasswordHash;
   if(player._pendingPasswordHash){ player._passwordHash = player._pendingPasswordHash; player._pendingPasswordHash = null; }
   try{
-    await sb.from('accounts').upsert({
+    const { error } = await sb.from('accounts').upsert({
       username: player.username,
       password: passwordHash,
       data: data,
       updated_at: new Date().toISOString()
     });
-  } catch(e){ console.error('Falha ao salvar conta', e); }
+    if(error){ console.error('Erro Supabase ao salvar conta:', error); showToast('Erro ao salvar: '+error.message); }
+  } catch(e){ console.error('Falha ao salvar conta', e); showToast('Erro de conexão ao salvar.'); }
 }
 document.getElementById('btnLogin').onclick = async ()=>{
   const user = document.getElementById('loginUser').value.trim();

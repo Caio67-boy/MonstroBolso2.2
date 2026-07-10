@@ -2280,6 +2280,17 @@ const npcs = [
 render();
 initStarterScreen();
 showLoginScreen();
+
+/* ============ AUTO-SAVE ============ */
+// Salva automaticamente a cada 30s, e também ao sair/fechar a página,
+// como reforço para não perder progresso entre os pontos de saveAccount() já existentes.
+setInterval(()=>{ if(player.username) saveAccount(); }, 30000);
+window.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden' && player.username) saveAccount();
+});
+window.addEventListener('beforeunload', ()=>{
+  if(player.username) saveAccount();
+});
 </script>
 </body>
 </html>
